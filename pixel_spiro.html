@@ -1,0 +1,885 @@
+<html>
+<head>
+	<style type="text/css">
+		#sp_canv{
+			background-color:black;
+			border:1px solid black;
+			padding-left:0px;
+			margin-left:0px;
+			margin-top:0px;
+		}
+		#tdiv{
+			background-color:lightskyblue;
+			border:2px solid black;
+			border-bottom:1px;
+			width:400px;
+			height:600px;
+			margin-left:702px;
+			padding-left:10px;
+			float:right;
+			position:relative;
+			top:8px;
+		}
+		#readoutDiv{
+			display: none;
+			background-color:black;
+			color:limegreen;
+			border:0px;
+			float:right;
+			margin-left:1120px;
+			height:800px;
+			width:300px;
+			top:8px;
+			position:relative;
+		}
+		#displayPeaks{
+			color:lightblue;
+		}
+		#displayIntersects{
+			color:magenta;
+		}
+		#displayPointCount{
+			color:purple;
+		}
+		#sourceVid{
+
+		}
+	</style>
+  	<script type="text/javascript">
+		//	Display functions
+
+		function drawSp(targetCanv,sp_params){
+			var thisSpiro = spf(sp_params);
+			canvas = document.getElementById(targetCanv);
+			if(canvas.getContext){
+				ctx = canvas.getContext('2d');
+				ctx.save();
+				ctx.translate(spCenter[0],spCenter[1]);
+				ctx.beginPath();
+				ctx.moveTo(	thisSpiro[0].x,thisSpiro[0].y);
+				for(i=1,n=thisSpiro.length;i<n;i++) ctx.lineTo(thisSpiro[i].x,thisSpiro[i].y);
+				ctx.lineWidth = spLineWidth;
+				ctx.strokeStyle = "darkred";
+				ctx.stroke();
+				ctx.restore();
+			}else{
+				alert('no damn canvas');
+			}
+		}	
+		function clearCanvas(targetCanv){
+			canvas = document.getElementById(targetCanv);
+			if(canvas.getContext){
+				ctx = canvas.getContext('2d');
+				ctx.clearRect(0,0,1350,800);
+			}else alert('no damn canvas');
+		}
+		function setClearCanvas(){
+			if(doClearCanvas){
+				doClearCanvas = false;
+				document.getElementById("clearCanvasState").innerHTML = "Don't Clear on Redraw";
+			}else{
+				doClearCanvas = true;
+				document.getElementById("clearCanvasState").innerHTML = "Clear on Redraw";
+			}
+		}
+		function setDrawIntersects(){
+			if(doDrawIntersects){
+				doDrawIntersects = false;
+				document.getElementById("drawIntersectsState").innerHTML = "Don't Draw Intersects";
+			}else{
+				doDrawIntersects = true;
+				document.getElementById("drawIntersectsState").innerHTML = "Draw Intersects";
+			}
+		}
+		function refreshFull(){
+			rotationLimit = 0;
+			redrawSp(0,'refresh');
+		}
+		function reDrawSp(newParameter,parameterName){
+			switch(parameterName){
+				case 'refresh':
+					break;
+				case 'spInner':
+					spInner = Math.floor(innerRadiusMax * newParameter);
+					spTheta1Max = getGraphInfo().rotations*2*Math.PI;
+					document.getElementById("irSlider").innerHTML = spInner;
+					break;
+				case 'spOuter':
+					spOuter = Math.floor(outerRadiusMax * newParameter);
+					spTheta1Max = getGraphInfo().rotations*2*Math.PI;
+					document.getElementById("orSlider").innerHTML = spOuter;
+					break;
+				case 'rotations':
+					spTheta1Max = newParameter*spRotations*2*Math.PI;
+					document.getElementById("rotSlider").innerHTML = newParameter*spRotations + " rotations";
+					break;
+				case 'spLineWidth':
+					spLineWidth = newParameter;			
+					document.getElementById("lwSlider").innerHTML = spLineWidth;
+					break;
+				case 'spDTheta':
+					spDTheta = newParameter;
+					document.getElementById("dtSlider").innerHTML = spDTheta;
+					break;
+				case 'spPen':
+					spPen = newParameter;
+					document.getElementById("pSlider").innerHTML = spPen;
+					break; 	
+			}
+
+			if (doClearCanvas) clearCanvas('sp_canv');
+			if(doDrawPixelSpiro) drawSp('sp_canv',[spOuter, spInner,spTheta1Min,spTheta1Max,spPen,spDTheta]);
+			if(doDrawCircles) drawSpiroGraphCircles('sp_canv',[spOuter, spInner,spTheta1Min,spTheta1Max,spPen,spDTheta]);
+			if(doUpdateStats) updateStatsDisplay();
+			if(doDrawIntersects || doShapify) var spIntersects = getSpIntersects();
+			if(doDrawIntersects) drawIntersects(spIntersects);
+			if(doShapify) drawShapes('sp_canv',getShapes(spIntersects));
+		}
+		function drawSpiroGraphCircles(targetCanv,sp_params){
+			canvas = document.getElementById(targetCanv);
+			if(canvas.getContext){
+				ctx = canvas.getContext('2d');
+				ctx.save();
+				ctx.translate(350,350);
+
+				ctx.beginPath();	// outer circle
+				ctx.arc(0,0,sp_params[0],0,2*Math.PI);
+				ctx.arc(sp_params[0]-sp_params[1],0,sp_params[1],0,2*Math.PI);
+				ctx.lineWidth = 2;
+				ctx.strokeStyle = "red";
+				ctx.stroke();
+				ctx.restore();
+			}else{
+				alert('no damn canvas');
+			}
+		}
+		function updateStatsDisplay(){
+			document.getElementById("displayPeaks").innerHTML = "Peak Count = " + getPeakCount([spOuter,spInner,spTheta1Min,spTheta1Max,spPen,spDTheta]);
+			var thisIntersectArray = getSpIntersects();
+			var intersectArrayDisplay = "x    y    theta radius";
+			var sig = 10;
+			for(var j=0;j<4;j++){
+				intersectArrayDisplay = intersectArrayDisplay + "<br>";
+				for(var i=0;i<5;i++){
+					intersectArrayDisplay = intersectArrayDisplay + "<br>" + 
+					Math.round(thisIntersectArray[j][i][x] * 10)/10 + " | " + 
+					Math.round(thisIntersectArray[j][i][y] * 10)/10 + " | " +
+					Math.round(thisIntersectArray[j][i][a] * 100)/100 + " | " +
+					Math.round(thisIntersectArray[j][i][radius] * 10)/10; 
+				}
+			}
+			document.getElementById("displayIntersects").innerHTML = "Intersect Count = " + thisIntersectArray[0].length + "<br>" + intersectArrayDisplay;
+			var thisSpiro = spf([spOuter,spInner,spTheta1Min,spTheta1Max,spPen,spDTheta]);
+			document.getElementById("displayPointCount").innerHTML = "Point Count = " + thisSpiro.length;
+		}
+		function drawIntersects(targetCanv,Sh){
+			canvas = document.getElementById(targetCanv);
+			if(canvas.getContext){
+				ctx = canvas.getContext('2d');
+				ctx.save();
+				ctx.translate(spCenter[0],spCenter[1]);
+				var color_lib = ['yellow','green','blue','purple','red','orange'];
+				for(var col in Sh){
+					for(var row in Sh[col]){
+						var counter = 0;
+						var doFill = true;
+						for(var pt in Sh[col][row]){
+							ctx.beginPath();
+							if(counter>3) doFill = false;
+							markerRadius = (counter+1);
+							counter = counter + 1;
+							ctx.arc(Sh[col][row][pt].x, Sh[col][row][pt].y, markerRadius,0,2*Math.PI);
+							ctx.lineWidth = .5;
+							ctx.strokeStyle = color_lib[(row) % 6];
+							ctx.stroke();
+							if(doFill){
+								ctx.fillStyle = color_lib[(row) % 6];
+								ctx.fill();
+							}
+						}
+					}
+				}
+			}
+		}
+		function drawShapes(targetCanv,Sp,img){
+			canvas = document.getElementById(targetCanv);
+			if(canvas.getContext){
+				ctx = canvas.getContext('2d');
+				ctx.save();
+				ctx.translate(spCenter[0],spCenter[1]);
+
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = "magenta";
+
+				var fillStyles = ["red","orange","yellow","green","blue","purple"];
+				for(var column=0;column<Sp.length;column++){
+					for(var shape=0;shape<Sp[column].length;shape++){
+						ctx.fillStyle = fillStyles[shape % fillStyles.length];
+						// Create an image element
+						var doClipImage = true;
+						var doFillShapes = false;
+						
+							ctx.save();	// Begin clipping region
+							ctx.beginPath();
+							ctx.moveTo(Sp[column][shape].p0.x,Sp[column][shape].p0.y);
+							if(doDrawShapeLines){
+								ctx.lineTo(Sp[column][shape].p1.x,Sp[column][shape].p1.y);
+								ctx.lineTo(Sp[column][shape].p2.x,Sp[column][shape].p2.y);
+								ctx.lineTo(Sp[column][shape].p3.x,Sp[column][shape].p3.y);
+								ctx.lineTo(Sp[column][shape].p0.x,Sp[column][shape].p0.y);
+								ctx.stroke();
+							}else if(doDrawShapeCurves){
+								ctx.bezierCurveTo(Sp[column][shape].cp0_1.x, Sp[column][shape].cp0_1.y,
+									Sp[column][shape].cp0_1.x, Sp[column][shape].cp0_1.y,
+									Sp[column][shape].p1.x,Sp[column][shape].p1.y);
+								ctx.bezierCurveTo(Sp[column][shape].cp1_2.x, Sp[column][shape].cp1_2.y,
+									Sp[column][shape].cp1_2.x, Sp[column][shape].cp1_2.y,
+									Sp[column][shape].p2.x,Sp[column][shape].p2.y);
+								ctx.bezierCurveTo(Sp[column][shape].cp2_3.x, Sp[column][shape].cp2_3.y,
+									Sp[column][shape].cp2_3.x, Sp[column][shape].cp2_3.y,
+									Sp[column][shape].p3.x,Sp[column][shape].p3.y);
+								ctx.bezierCurveTo(Sp[column][shape].cp3_0.x, Sp[column][shape].cp3_0.y,
+									Sp[column][shape].cp3_0.x, Sp[column][shape].cp3_0.y,
+									Sp[column][shape].p0.x,Sp[column][shape].p0.y);
+							}						
+							ctx.closePath();
+							if(doClipImage){
+								var centerShape = [Sp[column][shape].p3.x+(Sp[column][shape].p1.x-Sp[column][shape].p3.x)/2,Sp[column][shape].p3.y+(Sp[column][shape].p1.y-Sp[column][shape].p3.y)/2];
+								var centerImg = [img.width/2+60,img.height/2-10];
+								var offset = centerImg;
+								img.onload = putIMG(centerShape,Sp[column][shape].p0.a,offset,1);
+								
+
+								function putIMG(centerShape,thisangle,offset,scale){
+									ctx.clip();
+									ctx.save();
+									ctx.translate(centerShape[0],centerShape[1]);
+									ctx.rotate(thisangle + Math.PI/2);
+									ctx.drawImage(img,-offset[0],-offset[1]);
+
+									doMarkCenter = false;
+									if(doMarkCenter){
+										ctx.save();
+										ctx.stroke();
+										ctx.beginPath();
+										ctx.arc(0,0,5,0,Math.PI*2);
+										ctx.restore();
+									}
+									ctx.restore();
+								}
+							}
+							var doStrokeShapes = false;
+							if(doStrokeShapes) ctx.stroke();
+							ctx.restore();
+							if(doFillShapes){
+								ctx.fill();
+							}
+					}
+				}	
+				ctx.restore();
+			}
+		}
+		function drawAShape(c,s,i){
+			canvas = document.getElementById(c);
+			if(canvas.getContext){
+				ctx = canvas.getContext('2d');
+				ctx.save();
+				ctx.translate(spCenter[0],spCenter[1]);
+
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = "magenta";
+
+				ctx.beginPath();
+				ctx.moveTo(s.p0.x,s.p0.y);
+				if(doDrawShapeLines){
+					ctx.lineTo(s.p1.x, s.p1.y);
+					ctx.lineTo(s.p2.x, s.p2.y);
+					ctx.lineTo(s.p3.x, s.p3.y);
+					ctx.lineTo(s.p0.x, s.p0.y);
+					ctx.stroke();
+				}else if(doDrawShapeCurves){
+					ctx.quadraticCurveTo(s.cp0_1.x, s.cp0_1.y, s.p1.x,s.p1.y);
+					ctx.quadraticCurveTo(s.cp1_2.x, s.cp1_2.y, s.p2.x,s.p2.y);
+					ctx.quadraticCurveTo(s.cp2_3.x, s.cp2_3.y, s.p3.x,s.p3.y);
+					ctx.quadraticCurveTo(s.cp3_0.x, s.cp3_0.y, s.p0.x,s.p0.y);
+				}						
+				ctx.closePath();
+				if(doFillColor){
+					ctx.fillStyle = i;
+					ctx.fill();
+				}else{
+					var centerShape = [s.p3.x+(s.p1.x-s.p3.x)/2,s.p3.y+(s.p1.y-s.p3.y)/2];
+					var centerImg = [i.width/2+60,i.height/2-10];
+					var offset = centerImg;
+					//i.onload = putIMG(centerShape,s.p0.a,offset,1);
+					ctx.clip();
+					ctx.save();
+					ctx.translate(centerShape[0],centerShape[1]);
+					ctx.rotate(s.p0.a + Math.PI/2);
+					ctx.drawImage(i,-offset[0],-offset[1]);
+					ctx.restore();
+				}
+				ctx.restore();
+			}
+		}
+		function graphLoader(){
+			var spCanv = document.getElementById('sp_canv');
+			spCtx = spCanv.getContext('2d');
+			spCtx.webkitImageSmoothingEnabled = false;
+			var graphInfo = getGraphInfo();
+			spRotations = graphInfo.rotations;
+			spTheta1Max = graphInfo.rotations * Math.PI * 2;
+			if(doSequence){
+				spDTheta = 2;
+				dt_looper('sp_canv',1);
+			}else if(doFillImages){
+				var Sh = getIntersects();
+				var fillGraphic = document.createElement('IMG');
+				fillGraphic.src = "./img/luplep.jpg";
+				drawShapes('sp_canv',Sh,fillGraphic);
+			}else if(doFillVideo){
+				var Sh = getIntersects();
+				var fillGraphic = document.getElementById('sourceVid');
+				looper('sp_canv',Sh,fillGraphic);
+			}else if(doSeqImages){
+				var Sh = getIntersects();
+				img_looper('sp_canv',Sh);
+			}else if(doFillColor){
+				var Sh = getIntersects();
+				color_looper('sp_canv',Sh);
+			}
+			if(doDrawPixelSpiro) drawSp('sp_canv', [spOuter,spInner,spTheta1Min,spTheta1Max,spPen,spDTheta]);
+			if(doDrawIntersects) drawIntersects('sp_canv',Sh);
+			if(doUpdateStats) updateStatsDisplay();
+
+		}
+		function color_looper(targetCanv,shArray){
+			var color_lib = ['red','orange','yellow','green','blue','purple'];
+			for(var col=0;col<shArray.length;col++){
+				for(var row=0;row<shArray[col].length;row++){
+					var aShape = shArray[col][row];	
+					drawAShape(targetCanv,aShape,color_lib[row % color_lib.length]);
+				}
+			}
+		}
+		function looper(targetCanv,targetShapes,sourceGraphic){
+			if(sourceGraphic.paused || sourceGraphic.end ) return false;
+			drawShapes(targetCanv,targetShapes,sourceGraphic);
+			setTimeout(looper,20,targetCanv,targetShapes,sourceGraphic);
+		}
+		function dt_looper(targetCanv,count){
+			spDTheta = spDTheta - count*1/1000000;
+			count = count + ( Math.rand -.5);
+			if(spDTheta <= 0) return true;
+			//clearCanvas(targetCanv);
+			drawSp('sp_canv', [spOuter,spInner,spTheta1Min,spTheta1Max,spPen,spDTheta]);
+			setTimeout(dt_looper,30,'sp_canv',count)
+
+		}
+		function img_looper(targetCanv,shArray){
+			var file_lib = ['./img/eye203.jpg','./img/eye320.jpg','./img/lupdiap.jpg','./img/luplep.jpg'];
+			var img_lib = new Array(file_lib.length);
+
+			for(var file in file_lib){
+				img_lib[file] = document.createElement('IMG');
+				img_lib[file].src = file_lib[file];
+			}
+			for(var col=0;col<shArray.length;col++){
+				for(var row=0;row<shArray[col].length;row++){
+					var aShape = shArray[col][row];	
+					drawAShape(targetCanv,aShape,img_lib[col % img_lib.length]);
+				}
+			}
+			
+		}
+
+
+
+		function spriteLooper(){
+			img.next
+		}
+	</script>
+	<script type="text/javascript">//	Spirograph calculations
+		function refinePoint(start,end,type,target,granularity){
+			var thisDTheta = (end - start) / 10;
+			var Sp = spf([spOuter,spInner,start,end,spPen,thisDTheta]);
+			if(Sp[0].y < Sp[1].y) var clockWise = true;
+			else var clockWise = false;
+			var thisError;
+			var k;
+			if(type == 'a'){
+				if(clockWise){
+					for(k=0; k<Sp.length-1; k++){
+						var a_0 = Sp[k].a % (Math.PI*2);
+						var a_1 = Sp[k+1].a % (Math.PI*2);
+						if(a_0 > a_1) a_0 = a_0 + Math.PI*2;
+
+						if((a_0 <= target && a_1 > target) || (a_0 >= target && a_1 < target) || (target == 0 && a_0 > a_1)){
+							thisError = Math.sqrt(Math.pow(target-a_1,2));
+							if(thisError > granularity){
+								return refinePoint(Sp[k].theta1,Sp[k+1].theta1,type,target,granularity);
+							}else{
+								return Sp[k];
+							}
+						}
+					}
+				}else if(!clockWise){
+					for(k=0; k<Sp.length-1; k++){
+						var a_0 = Sp[k].a % (Math.PI*2);
+						var a_1 = Sp[k+1].a % (Math.PI*2);
+						if(a_0 < a_1) a_0 = a_0 + Math.PI*2;
+
+						if((a_0 <= target && a_1 > target) || (a_0 >= target && a_1 < target) || (target == 0 && a_0>a_1)){
+							thisError = Math.sqrt(Math.pow(target-a_1,2));
+							if(thisError > granularity){
+								return refinePoint(Sp[k].theta1,Sp[k+1].theta1,type,target,granularity);
+							}else{
+								return Sp[k];
+							}
+						}
+					}
+				}
+			}else if(type == 'maxima'){
+				for(k=1;k<Sp.length;k++){
+					if(Sp[k].radius>Sp[k-1].radius && Sp[k].radius>Sp[k+1].radius){
+						thisError = Math.sqrt(Math.pow(Sp[k+1].a-Sp[k-1].a,2));
+						if(thisError > granularity){
+							return refinePoint(Sp[k-1].theta1,Sp[k+1].theta1,type,target,granularity)
+						}else{
+							return Sp[k];
+						}
+					}
+				}
+			}else if(type == 'minima'){
+				for(k=1;k<Sp.length;k++){
+					if(Sp[k].radius<Sp[k-1].radius && Sp[k].radius<Sp[k+1].radius){
+						thisError = Math.sqrt(Math.pow(Sp[k+1].a-Sp[k-1].a,2));
+						if(thisError > granularity){
+							return refinePoint(Sp[k-1].theta1,Sp[k+1].theta1,type,target,granularity)
+						}else{
+							return Sp[k];
+						}
+					}
+				}
+			}
+			return "error: no refined point";
+		}
+		function getGraphInfo(){
+			var singleCycleTheta;
+			var singleCyclePoint;
+			var peakCount = 0;
+			var runningTheta = 0;
+			var peakCountPrecision = 0.0001;
+			var peakError = 0;
+			var singleSp = spf([spOuter,spInner,0,Math.PI*2,spPen,spDTheta]);
+			var i;
+			if(singleSp[0].radius < singleSp[1].radius){
+				for(i=1;i<singleSp.length;i++){
+					if(singleSp[i-1].radius>singleSp[i].radius  && singleSp[i+1].radius>singleSp[i].radius){	//test for minima
+						singleCyclePoint = refinePoint(singleSp[i-1].theta1,singleSp[i+1].theta1,'minima',0,.000001);
+						singleCycleTheta1 = singleCyclePoint.theta1;
+						break;
+					}
+				}
+			}else{
+				for(i=1;i<singleSp.length;i++){
+					if(singleSp[i-1].radius<singleSp[i].radius  && singleSp[i+1].radius<singleSp[i].radius){	//test for maxima
+						singleCyclePoint = refinePoint(singleSp[i-1].theta1,singleSp[i+1].theta1,'maxima',0,.000001);
+						singleCycleTheta1 = singleCyclePoint.theta1;
+						break;
+					}
+				}
+			}
+			while(peakCount <= maxAllowablePeaks){
+				runningTheta = runningTheta + singleCycleTheta1;
+				peakCount = peakCount + 1;
+				peakError = runningTheta % (Math.PI*2);
+				if(peakError < peakCountPrecision || Math.PI*2 - peakError < peakCountPrecision){
+					return {
+						'peakCount': peakCount,
+						'rotations': Math.round(runningTheta/Math.PI/2)
+					}
+				}
+			}
+			return "too many peaks";
+		}
+		function getIntersects(){
+			//	1.  step through Sp looking for radius minima @ +-slicetheta/2 or +-slicetheta, refine point
+			var graphInfo = getGraphInfo();
+			var peakTheta = Math.PI*2 / graphInfo.peakCount;
+			var singleSp = spf([spOuter,spInner,0,spTheta1Max,spPen,spDTheta]);
+			var clockWise = false;
+			// 	y is down in canvas, so y_increasing = a_increasing = clockWise
+			//	need to make sure a doesn't jump 0, 2pi, 2pi+x, 2pi+y, 2pi+z, ...
+			//	
+			//	clockWise: y++, a++
+			//  !clockWise: y--, a--
+
+
+			if(singleSp[0].y < singleSp[1].y) clockWise = true;
+			else peakTheta = -peakTheta;
+
+			// Find startpoint (first radius minima point)
+			
+			if(clockWise){
+				for(var i=1;i<singleSp.length-1;i++){
+					if(singleSp[i-1].radius>singleSp[i].radius && singleSp[i+1].radius>singleSp[i].radius){
+						if(singleSp[i].a > peakTheta/4 && singleSp[i].a < peakTheta*1.5){
+							var startPoint = refinePoint(singleSp[i-1].theta1,singleSp[i+1].theta1,'minima',0,0.00001);
+							break;
+						}
+					}
+				}
+			}else if(!clockWise){
+				for(var i=1;i<singleSp.length-1;i++){
+					if(singleSp[i-1].radius>singleSp[i].radius && singleSp[i+1].radius>singleSp[i].radius){
+						if(singleSp[i].a < Math.PI*2 + peakTheta/4 && singleSp[i].a > Math.PI*2 + peakTheta*1.5){
+							var startPoint = refinePoint(singleSp[i-1].theta1,singleSp[i+1].theta1,'minima',0,0.00001);
+							break;
+						}
+					}
+				}
+			}
+			//  2.  continue to radius maxima, refine point
+			for(i=i;i<singleSp.length-1;i++){
+				if(singleSp[i-1].radius<singleSp[i].radius && singleSp[i+1].radius<singleSp[i].radius){
+					var endPoint = refinePoint(singleSp[i-1].theta1,singleSp[i+1].theta1,'maxima',0,0.000001);
+					break;
+				}
+			}
+			// 	stripe is a short section of spirograph from a minima to a maxima with 1000 points
+			// 	it runs along the _outside_ of the shapes to be defined below and begins peakTheta/2 before p1
+			var thisDTheta = (endPoint.theta1-startPoint.theta1)/1000;
+			var dThetaTotal = endPoint.a - startPoint.a;
+			var rowCount = Math.round((dThetaTotal/peakTheta-0.5)*20)/10;
+			var stripe = spf([spOuter,spInner,startPoint.theta1,endPoint.theta1+thisDTheta,spPen,thisDTheta]);
+			var Sh = new Array;
+			Sh[0] = new spShape();
+			for(var item in Sh[0]) Sh[0][item] = new spPoint();
+
+			//----------------------------------------------------------
+			//	First shape
+			//----------------------------------------------------------
+			//		p3, p2, cp0_1, and cp2_3 refined from spirograph
+			//		Point numbering is clockWise, starting at radius minima
+			var p1Theta 	= (startPoint.a + peakTheta/2);
+			var p2Theta	 	= (startPoint.a + peakTheta);
+			var cp0_1Theta 	= (startPoint.a + peakTheta*1/4);
+			var cp1_2Theta 	= (startPoint.a + peakTheta*3/4);
+			if(clockWise){
+				for(i=1;i<stripe.length-1;i++){
+					if(stripe[i].a < p1Theta && stripe[i+1].a > p1Theta){
+						Sh[0].p1.copy( refinePoint( stripe[i].theta1, stripe[i+1].theta1, 'a', p1Theta, 0.00001 ));
+					}
+					if(stripe[i].a < p2Theta && stripe[i+1].a > p2Theta){
+						Sh[0].p2.copy( refinePoint(stripe[i].theta1, stripe[i+1].theta1, 'a', p2Theta, 0.00001 ));
+					}
+					if(stripe[i].a < cp0_1Theta && stripe[i+1].a > cp0_1Theta){
+						Sh[0].cp0_1.copyRotate( refinePoint( stripe[i].theta1, stripe[i+1].theta1, 'a', cp0_1Theta, 0.00001), peakTheta/2);
+					}
+					if(stripe[i].a < cp1_2Theta && stripe[i+1].a > cp1_2Theta){
+						Sh[0].cp1_2.copy( refinePoint( stripe[i].theta1, stripe[i+1].theta1, 'a', cp1_2Theta, 0.00001));
+					}
+				}
+			}else{
+/*				var p1Theta 	=  (startPoint.a + peakTheta/2);
+				var p2Theta	 	=  (startPoint.a + peakTheta);
+				var cp0_1Theta 	=  (startPoint.a + peakTheta*1/4);
+				var cp1_2Theta 	=  (startPoint.a + peakTheta*3/4);*/
+				for(i=1;i<stripe.length-1;i++){
+					if(stripe[i].a > p1Theta && stripe[i+1].a < p1Theta){
+						Sh[0].p1.copy( refinePoint( stripe[i].theta1, stripe[i+1].theta1, 'a', p1Theta, 0.00001 ));
+					}
+					if(stripe[i].a > p2Theta && stripe[i+1].a < p2Theta){
+						Sh[0].p2.copy( refinePoint(stripe[i].theta1, stripe[i+1].theta1, 'a', p2Theta, 0.00001 ));
+					}
+					if(stripe[i].a > cp0_1Theta && stripe[i+1].a < cp0_1Theta){
+						Sh[0].cp0_1.copyRotate( refinePoint( stripe[i].theta1, stripe[i+1].theta1, 'a', cp0_1Theta, 0.00001), peakTheta/2);
+					}
+					if(stripe[i].a > cp1_2Theta && stripe[i+1].a < cp1_2Theta){
+						Sh[0].cp1_2.copy( refinePoint( stripe[i].theta1, stripe[i+1].theta1, 'a', cp1_2Theta, 0.00001));
+					}
+				}
+			}
+			
+			// p0, p1, cp1_2, and cp3_0 copied and/or rotated from previously calculated points
+
+			Sh[0].p0.copyRotate(startPoint,peakTheta);
+			Sh[0].p3.copyRotate(Sh[0].p1,peakTheta);
+			Sh[0].cp2_3.copyRotate(Sh[0].cp1_2,peakTheta/2);
+			Sh[0].cp3_0.copyRotate(Sh[0].cp0_1,peakTheta/2);
+
+			//----------------------------------------------------------
+			//	Subsequent shapes
+			//----------------------------------------------------------
+			// 		P2 and CP1_2 are calculated by finding points on the spirograph.  
+			// 		All others are copied and/or rotated from previously calculated points
+
+			//rowCount = 6; // For debugging only
+
+
+			for(var row = 1;row<rowCount;row++){
+				var p2Theta 	= startPoint.a + peakTheta * (row + 2)/2;			// (1.5, 2, 2.5, ...)
+				var cp1_2Theta 	= startPoint.a + peakTheta * (row + 1.5)/2;  	// (1.25, 1.75, 2.25, ...)
+				Sh[row] = new spShape();
+				if(clockWise){	
+					for(i=1;i<stripe.length-1;i++){
+						if(stripe[i].a < p2Theta && stripe[i+1].a > p2Theta){
+							Sh[row].p2.copy( refinePoint(stripe[i].theta1,stripe[i+1].theta1,'a',p2Theta,0.00001));
+						}else if(stripe[i].a < cp1_2Theta && stripe[i+1].a > cp1_2Theta){
+							Sh[row].cp1_2.copy( refinePoint(stripe[i].theta1,stripe[i+1].theta1,'a',cp1_2Theta,0.00001));
+						}
+					}
+				}else{
+					for(i=1;i<stripe.length-1;i++){
+						if(stripe[i].a > p2Theta && stripe[i+1].a < p2Theta){
+							Sh[row].p2.copy( refinePoint(stripe[i].theta1,stripe[i+1].theta1,'a',p2Theta,0.00001));
+						}else if(stripe[i].a > cp1_2Theta && stripe[i+1].a < cp1_2Theta){
+							Sh[row].cp1_2.copy( refinePoint(stripe[i].theta1,stripe[i+1].theta1,'a',cp1_2Theta,0.00001));
+						}
+					}
+				}
+				Sh[row].p0.copy(Sh[row-1].p3);
+				Sh[row].p1.copy(Sh[row-1].p2);
+				Sh[row].p3.copyRotate(Sh[row].p1,peakTheta);
+				Sh[row].cp2_3.copyRotate(Sh[row].cp1_2,peakTheta/2);
+				Sh[row].cp0_1.copy(Sh[row-1].cp2_3);
+				Sh[row].cp3_0.copyRotate(Sh[row-1].cp2_3, peakTheta/2);
+			}
+			//----------------------------------------------------------
+			//	All other stripes
+			//----------------------------------------------------------
+			var columnCount = graphInfo.peakCount;
+//			columnCount = 1;  // for debugging only
+			var Sp = new Array(columnCount);
+			Sp[0] = Sh;
+			for(var column=1;column<columnCount;column++){
+				Sp[column] = new Array(rowCount);
+				for(var row=0;row<rowCount;row++){
+					Sp[column][row] = new spShape();
+					Sp[column][row].copyRotate(Sp[0][row], column*peakTheta);
+				}
+			}
+
+			return Sp;
+		}
+
+		function spShape(p0,p1,p2,p3,cp0_1,cp1_2,cp2_3,cp3_0){
+			this.p0 = new spPoint;
+			this.p1 = new spPoint;
+			this.p2 = new spPoint;
+			this.p3 = new spPoint;
+			this.cp0_1 = new spPoint;
+			this.cp1_2 = new spPoint;
+			this.cp2_3 = new spPoint;
+			this.cp3_0 = new spPoint;
+
+			this.rotate = rotate;
+			this.copy = copy;
+			this.copyRotate = copyRotate;
+			function copy(shape){
+				this.p0.copy(shape.p0);
+				this.p1.copy(shape.p1);
+				this.p2.copy(shape.p2);
+				this.p3.copy(shape.p3);
+				this.cp0_1.copy(shape.cp0_1);
+				this.cp1_2.copy(shape.cp1_2);
+				this.cp2_3.copy(shape.cp2_3);
+				this.cp3_0.copy(shape.cp3_0);
+			}
+			function rotate(angle){
+				this.p0.rotate(angle);
+				this.p1.rotate(angle);
+				this.p2.rotate(angle);
+				this.p3.rotate(angle);
+				this.cp0_1.rotate(angle);
+				this.cp1_2.rotate(angle);
+				this.cp2_3.rotate(angle);
+				this.cp3_0.rotate(angle);
+			}
+			function copyRotate(shape,angle){
+				this.p0.copyRotate(shape.p0, angle);
+				this.p1.copyRotate(shape.p1,angle);
+				this.p2.copyRotate(shape.p2,angle);
+				this.p3.copyRotate(shape.p3,angle);
+				this.cp0_1.copyRotate(shape.cp0_1, angle);
+				this.cp1_2.copyRotate(shape.cp1_2, angle);
+				this.cp2_3.copyRotate(shape.cp2_3, angle);
+				this.cp3_0.copyRotate(shape.cp3_0, angle);
+			}
+		}
+		function spPoint(x,y,theta1,theta2,radius,a){
+			this.x = x;
+			this.y = y;
+			this.theta1 = theta1;
+			this.theta2 = theta2;
+			this.radius = radius;
+			this.a = a;
+
+			this.rotate = rotate;
+			this.copy = copy;
+			this.copyRotate = copyRotate;
+			function rotate(angle){		// Rotating a point destroys theta1 and theta2 information
+				this.a =  this.a + angle; //Math.asin(this.y/this.radius) + angle;		//flag  shouldn't this be this.a to begin?
+				//if(this.a<0) this.a = Math.PI * 2 + this.a;
+				this.x = Math.cos(this.a)*this.radius;
+				this.y = Math.sin(this.a)*this.radius;
+				this.theta1 = NaN;
+				this.theta2 = NaN;
+			}
+			function copy(point){
+				this.a = point.a;
+				this.radius = point.radius;
+				this.x = point.x;
+				this.y = point.y;
+				this.theta1 = point.theta1;
+				this.theta2 = point.theta2;
+			}
+			function copyRotate(point,angle){
+				this.a = point.a + angle;
+				//if(this.a<0) this.a = Math.PI * 2 + this.a;
+				this.radius = point.radius;
+				this.x = Math.cos(this.a)*this.radius;
+				this.y = Math.sin(this.a)*this.radius;
+				this.theta1 = NaN;
+				this.theta2 = NaN;
+			}
+		}
+		function spf(sp_params){
+			outerRad  = sp_params[0];	// radius of the outer spirograph ring
+			innerRad  = sp_params[1];	// radius of the inner spirograph ring
+			theta1Min = sp_params[2];	// begining angle for inner ring center
+			theta1Max = sp_params[3];	// ending angle for inner ring center
+			pen       = sp_params[4];	// radius of pen expressed as fraction of inner ring radius
+			dtheta 	  = sp_params[5];	// size of theta1 delta
+
+			thetaSteps = parseInt((theta1Max-theta1Min)/dtheta + 1); // total number of pixels to calculate
+			var Sp = new Array(thetaSteps);	
+			var i;
+			Sp[0] = new spPoint;
+			innerCenterRad = outerRad-innerRad
+			Sp[0].theta1 = theta1Min;
+			Sp[0].theta2 = 0 - theta1Min*innerRad/outerRad - theta1Min;
+			Sp[0].x = innerCenterRad*Math.cos(theta1Min) + innerRad*Math.cos(Sp[0].theta2)*pen;
+			Sp[0].y = innerCenterRad*Math.sin(theta1Min) + innerRad*Math.sin(Sp[0].theta2)*pen;
+			Sp[0].radius = Math.sqrt(Math.pow(Sp[0].x,2) + Math.pow(Sp[0].y,2));
+			if(Sp[0].x< 0) Sp[0].a = (Math.PI - Math.asin(Sp[0].y/Sp[0].radius));			//quadrant 2 & 3
+			else if(Sp[0].x>=0&&Sp[0].y>=0) Sp[0].a = (Math.asin(Sp[0].y/Sp[0].radius));	//quadrant 1
+			else Sp[0].a = (2*Math.PI - Math.asin(Sp[0].y/Sp[0].radius));					//quadrant 4
+
+			Sp1Theta1 = Sp[0].theta1 + dtheta;
+			Sp1Theta2 = Sp[0].theta2 - dtheta*innerRad/outerRad - dtheta;
+			Sp1Y      = innerCenterRad * Math.sin(Sp1Theta1) + innerRad*Math.sin(Sp1Theta2)*pen;
+			if(Sp[0].a == 0 && Sp1Y < 0) Sp[0].a = Math.PI * 2;
+
+			for(i=1;i<thetaSteps;i++){
+				Sp[i] = new spPoint;
+				Sp[i].theta1 = Sp[i-1].theta1 + dtheta;
+				Sp[i].theta2 = Sp[i-1].theta2 - dtheta*innerRad/outerRad - dtheta;
+				Sp[i].x = innerCenterRad * Math.cos(Sp[i].theta1) + innerRad*Math.cos(Sp[i].theta2)*pen;
+				Sp[i].y = innerCenterRad * Math.sin(Sp[i].theta1) + innerRad*Math.sin(Sp[i].theta2)*pen;
+
+				Sp[i].radius = Math.sqrt(Math.pow(Sp[i].x,2) + Math.pow(Sp[i].y,2));
+				if(Sp[i].x< 0) Sp[i].a = (Math.PI - Math.asin(Sp[i].y/Sp[i].radius));			//quadrant 2 & 3
+				else if(Sp[i].x>=0 && Sp[i].y>=0) Sp[i].a = (Math.asin(Sp[i].y/Sp[i].radius));	//quadrant 1
+				else Sp[i].a = (2*Math.PI + Math.asin(Sp[i].y/Sp[i].radius));					//quadrant 4
+			}
+			return Sp; 
+		}
+	</script>
+	<script name="variables" type="text/javascript">
+		var Sp_colNames = new Array('x','y','theta1','theta2','radius','a');
+
+		var CW 			=  2;	// 1 for clockwise, 2 for counterclockwise
+		var spOuter 	=  300*3;
+		var spInner		=  120*CW*3
+		var spTheta1Min =  0;
+		var spTheta1Max =  0;
+		var spPen 		=  .5;
+		var spDTheta 	=  .001;
+		var spLineWidth =  1;
+		var spRotations =  0;
+		var spCenter 	= [600,500];
+
+		var spShapeLineWidth = 0.25;
+		var spShapeStrokeColor = "magenta";
+
+		var outerRadiusMax = 300;
+		var innerRadiusMax = 180;
+		var rotationLimit = 1000;
+		var maxAllowablePeaks = 100;
+
+		var doDrawPixelSpiro 	= true;
+		var doDrawCircles 		= false;
+		var doDrawIntersects 	= true;
+		var doClearCanvas 		= true;
+		var doUpdateStats 		= false;
+		var doShapify 			= true;
+		var doDrawShapeLines 	= false;
+		var doDrawShapeCurves 	= true;
+		var doFillColor			= false;
+		var doFillImages 		= false;
+		var doFillVideo 		= false;
+		var doSequence			= false;
+		var doSeqImages			= true;
+
+		var prettySpiros = [[300,180],
+							[240,144],
+							[252,144],
+							[300,160],
+							[180,108], // intersects 6,8,8,8 
+							[225,180], // intersects 8,9,9,8
+							[288,180]  // intersects 12,13,13,12
+							];
+	</script>
+						
+
+</head>
+<body onload="graphLoader()">
+	<canvas id="sp_canv" width="1350" height="800">
+		no canvas support
+	</canvas>
+<!--	<video id="sourceVid" width="320" height="240" controls loop>
+		<source  src="./img/eye_spiro_v.mp4">
+	</video>-->
+	<div id="tdiv">
+		Line Width  <input type="range" name="Line Width" min="10" max="1000" onchange="reDrawSp(this.value/100,'spLineWidth')">
+		<span id="lwSlider">slide it!</span><br>
+		Inner Radius<input type="range" name="Inner Radius" min="50" max="100" onchange="reDrawSp(this.value/100,'spInner')">
+		<span id="irSlider">200</span><br>
+		Outer Radius<input type="range" name="Outer Radius" min="1" max="100" onchange="reDrawSp(this.value/100,'spOuter')">
+		<span id="orSlider">250</span><br>
+		dTheta  	<input type="range" name="dTheta" min="1" max="200" onchange="reDrawSp(this.value/100,'spDTheta')">
+		<span id="dtSlider"></span><br>
+		Rotations  	<input type="range" name="Rotations" min="1" max="100" onchange="reDrawSp(this.value/100,'rotations')">
+		<span id="rotSlider"></span><br>
+		Pen 		<input type="range" name="Pen" min="1" max="50" onchange="reDrawSp(this.value/50,'spPen')">
+		<span id="pSlider"></span><br><br>
+		<a href="javascript:getSpIntersects()">Get Intersects</a><br>
+		<a href="javascript:setFastFullState()" id="fastFullState">Fast redraw</a>
+		<a href="javascript:setDrawIntersects()" id="drawIntersectsState">Draw Intersects</a><br>
+		<a href="javascript:setClearCanvas()" id="clearCanvasState">Clear on Redraw</a><br>
+		<a href="javascript:makeShapes()" id="makeShapesState">Make Shapes</a><br>
+		<a href="javascript:clearCanvas('sp_canv')">Clear Now</a><br><br>
+		<a href="javascript:reDrawSp(0,'refresh')">refresh</a><br>
+		<a href="javascript:refreshFull()">refresh Full</a><br>
+		<span id="prettyList"></span><br>
+		<a>Random Spirograph</a>
+		<a>Save Drawing</a>
+	</div>
+	<div id="readoutDiv">
+		SpiroStats<br>
+		<span id="displayPeaks">Peaks</span><br>
+		<span id="displayIntersects">Intersects</span><br>
+		<span id="displayPointCount">Points</span><br>
+
+	</div>
+	<p id="dev_notes">
+		1.  code up image compositing
+		2.  check out optimization - 
+			2d array of shapes  vs  1d stripe array of shapes copyRotated using canvas functions
+	</p>
+
+
+</body>
+</html>
